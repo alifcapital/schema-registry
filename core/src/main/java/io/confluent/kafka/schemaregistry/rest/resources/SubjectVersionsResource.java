@@ -514,11 +514,12 @@ public class SubjectVersionsResource {
                                   + " to the Kafka store", e);
     } catch (SchemaRegistryRequestForwardingException e) {
       throw Errors.requestForwardingFailedException("Error while forwarding register schema request"
-                                                    + " to the leader", e);
+      + " to the leader", e);
     } catch (IncompatibleSchemaException e) {
-      throw Errors.incompatibleSchemaException("Schema being registered is incompatible with"
-              + " an earlier schema for subject \"" + subjectName + "\", details: "
-              + e.getMessage(), e);
+      throw Errors.incompatibleSchemaException(
+          String.format("Schema being registered is incompatible with an earlier schema for subject \"%s\", details: %s. New Schema: %s",
+              subjectName, e.getMessage(), request.getSchema()),
+          e);
     } catch (UnknownLeaderException e) {
       throw Errors.unknownLeaderException("Leader not known.", e);
     } catch (SchemaRegistryException e) {

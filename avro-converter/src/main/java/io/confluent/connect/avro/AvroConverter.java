@@ -137,7 +137,8 @@ public class AvroConverter implements Converter {
           new AvroSchema(avroSchema));
     } catch (TimeoutException e) {
       throw new RetriableException(
-          String.format("Failed to serialize Avro data from topic %s :", topic),
+          String.format("Failed to serialize Avro data from topic %s."
+              + " New Schema: %s", topic, schema),
           e
       );
     } catch (SerializationException e) {
@@ -150,13 +151,15 @@ public class AvroConverter implements Converter {
         );
       } else {
         throw new DataException(
-            String.format("Failed to serialize Avro data from topic %s:", topic),
+            String.format("Failed to serialize Avro data from topic %s. New Schema: %s",
+                topic, schema),
             e
         );
       }
     } catch (InvalidConfigurationException e) {
       throw new ConfigException(
-          String.format("Failed to access Avro data from topic %s : %s", topic, e.getMessage())
+          String.format("Failed to access Avro data from topic %s : %s."
+              + " New Schema: %s", topic, e.getMessage(), schema)
       );
     }
   }
