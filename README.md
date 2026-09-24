@@ -189,6 +189,12 @@ Thanks for helping us to make Schema Registry even better!
 - Source Code: https://github.com/confluentinc/schema-registry
 - Issue Tracker: https://github.com/confluentinc/schema-registry/issues
 
+Fork extension
+--------------
+
+This fork adds [ICEBERG compatibility for schema-evolving CDC sinks](docs/iceberg-compatibility.md),
+based on upstream v8.3.2. The documentation includes behavior, limits and Kafka 3.7.2 verification.
+
 License
 -------
 

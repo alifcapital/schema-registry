@@ -220,7 +220,8 @@ public class LocalSchemaRegistryClient implements SchemaRegistryClient {
           + " to the leader", e);
     } catch (IncompatibleSchemaException e) {
       throw Errors.incompatibleSchemaException(
-          String.format("Schema being registered is incompatible with an earlier schema for subject \"%s\". New Schema: %s",
+          String.format("Schema being registered is incompatible with an earlier schema"
+              + " for subject \"%s\". New Schema: %s",
               subject, schema), e);
     } catch (UnknownLeaderException e) {
       throw Errors.unknownLeaderException("Leader not known.", e);

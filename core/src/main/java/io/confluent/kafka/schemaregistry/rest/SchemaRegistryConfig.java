@@ -435,7 +435,8 @@ public class SchemaRegistryConfig extends RestConfig {
       + "backward_transitive (new schema is backward compatible with all previous versions), "
       + "forward_transitive (new schema is forward compatible with all previous versions), "
       + "full_transitive (new schema is backward and forward compatible with all previous "
-      + "versions)";
+      + "versions), "
+      + "iceberg (Avro field evolution under Iceberg v2 rules with retained subject history)";
   protected static final String VALIDATE_FIELDS_DOC = "Determines whether field validation is "
       + "enabled or not. If enabled, it checks whether any top level fields conflict with the "
       + "reserved fields in metadata. It also checks for the presence of any field names "

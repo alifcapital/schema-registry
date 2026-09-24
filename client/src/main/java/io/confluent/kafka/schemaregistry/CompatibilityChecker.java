@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.schemaregistry;
 
+import io.confluent.kafka.schemaregistry.avro.IcebergSchemaValidator;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -70,6 +71,9 @@ public class CompatibilityChecker {
   public static final CompatibilityChecker NO_OP_CHECKER =
       new CompatibilityChecker(NO_OP_VALIDATOR);
 
+  public static final CompatibilityChecker ICEBERG_CHECKER =
+      new CompatibilityChecker(new IcebergSchemaValidator());
+
   private final SchemaValidator validator;
 
   private CompatibilityChecker(SchemaValidator validator) {
@@ -104,6 +108,8 @@ public class CompatibilityChecker {
 
   public static CompatibilityChecker checker(CompatibilityLevel level) {
     switch (level) {
+      case ICEBERG:
+        return CompatibilityChecker.ICEBERG_CHECKER;
       case NONE:
         return CompatibilityChecker.NO_OP_CHECKER;
       case BACKWARD:

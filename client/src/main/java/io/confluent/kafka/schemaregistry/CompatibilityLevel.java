@@ -23,7 +23,8 @@ public enum CompatibilityLevel {
   FORWARD,
   FORWARD_TRANSITIVE,
   FULL,
-  FULL_TRANSITIVE;
+  FULL_TRANSITIVE,
+  ICEBERG;
 
   public final String name;
 
@@ -51,6 +52,8 @@ public enum CompatibilityLevel {
       return FORWARD_TRANSITIVE;
     } else if (FULL_TRANSITIVE.name.equals(name)) {
       return FULL_TRANSITIVE;
+    } else if (ICEBERG.name.equals(name)) {
+      return ICEBERG;
     } else {
       return null;
     }

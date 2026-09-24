@@ -429,6 +429,7 @@ paths:
                 - FORWARD_TRANSITIVE
                 - FULL
                 - FULL_TRANSITIVE
+                - ICEBERG
               example: FULL_TRANSITIVE
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
@@ -441,6 +442,7 @@ paths:
                 - FORWARD_TRANSITIVE
                 - FULL
                 - FULL_TRANSITIVE
+                - ICEBERG
               example: FULL_TRANSITIVE
             application/json; qs=0.5:
               schema:
@@ -453,6 +455,7 @@ paths:
                 - FORWARD_TRANSITIVE
                 - FULL
                 - FULL_TRANSITIVE
+                - ICEBERG
               example: FULL_TRANSITIVE
         "500":
           description: Internal Server Error. Error code 50001 indicates a failure
@@ -636,6 +639,7 @@ paths:
                 - FORWARD_TRANSITIVE
                 - FULL
                 - FULL_TRANSITIVE
+                - ICEBERG
               example: FULL_TRANSITIVE
             application/vnd.schemaregistry+json; qs=0.9:
               schema:
@@ -648,6 +652,7 @@ paths:
                 - FORWARD_TRANSITIVE
                 - FULL
                 - FULL_TRANSITIVE
+                - ICEBERG
               example: FULL_TRANSITIVE
             application/json; qs=0.5:
               schema:
@@ -660,6 +665,7 @@ paths:
                 - FORWARD_TRANSITIVE
                 - FULL
                 - FULL_TRANSITIVE
+                - ICEBERG
               example: FULL_TRANSITIVE
         "404":
           description: Not Found. Error code 40401 indicates subject not found.
@@ -3143,6 +3149,7 @@ components:
           - FORWARD_TRANSITIVE
           - FULL
           - FULL_TRANSITIVE
+          - ICEBERG
           - NONE
         compatibilityPolicy:
           type: string
@@ -3183,6 +3190,7 @@ components:
           - FORWARD_TRANSITIVE
           - FULL
           - FULL_TRANSITIVE
+          - ICEBERG
           - NONE
         compatibilityPolicy:
           type: string

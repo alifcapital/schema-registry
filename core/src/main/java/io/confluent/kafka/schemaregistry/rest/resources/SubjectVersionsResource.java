@@ -517,7 +517,8 @@ public class SubjectVersionsResource {
       + " to the leader", e);
     } catch (IncompatibleSchemaException e) {
       throw Errors.incompatibleSchemaException(
-          String.format("Schema being registered is incompatible with an earlier schema for subject \"%s\", details: %s. New Schema: %s",
+          String.format("Schema being registered is incompatible with an earlier schema"
+              + " for subject \"%s\", details: %s. New Schema: %s",
               subjectName, e.getMessage(), request.getSchema()),
           e);
     } catch (UnknownLeaderException e) {

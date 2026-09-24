@@ -180,7 +180,7 @@ public class Config {
 
   @Schema(description = "Compatibility Level",
       allowableValues = {"BACKWARD", "BACKWARD_TRANSITIVE", "FORWARD", "FORWARD_TRANSITIVE",
-        "FULL", "FULL_TRANSITIVE", "NONE"},
+        "FULL", "FULL_TRANSITIVE", "NONE", "ICEBERG"},
       example = "FULL_TRANSITIVE")
   @JsonProperty("compatibilityLevel")
   public String getCompatibilityLevel() {

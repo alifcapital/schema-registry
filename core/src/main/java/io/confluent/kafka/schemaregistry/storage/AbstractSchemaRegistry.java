@@ -1243,7 +1243,7 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
     CompatibilityPolicy compatibilityPolicy =
             CompatibilityPolicy.forName(config.getCompatibilityPolicy());
     String compatibilityGroup = config.getCompatibilityGroup();
-    if (compatibilityGroup != null) {
+    if (compatibilityGroup != null && compatibility != CompatibilityLevel.ICEBERG) {
       String groupValue = getCompatibilityGroupValue(parsedSchema, compatibilityGroup);
       // Only check compatibility against schemas with the same compatibility group value,
       // which may be null.
@@ -1404,12 +1404,19 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
     }
 
     try {
+      Config config = getConfigInScope(subject);
+      if (CompatibilityLevel.ICEBERG
+          == CompatibilityLevel.forName(config.getCompatibilityLevel())) {
+        // ICEBERG models retained table fields, including fields missing from the latest schema.
+        // A single-version REST preflight must not bypass that history.
+        previousSchemas = new ArrayList<>();
+        getAllVersions(subject, LookupFilter.DEFAULT).forEachRemaining(previousSchemas::add);
+      }
       List<ParsedSchemaHolder> prevParsedSchemas = new ArrayList<>(previousSchemas.size());
       for (SchemaKey previousSchema : previousSchemas) {
         prevParsedSchemas.add(new LazyParsedSchemaHolder(this, previousSchema));
       }
 
-      Config config = getConfigInScope(subject);
       boolean doValidation = isSchemaNewSchemaValidationEnabled(config);
       ParsedSchema parsedSchema = canonicalizeSchema(newSchema, config, doValidation, normalize);
       if (parsedSchema == null) {

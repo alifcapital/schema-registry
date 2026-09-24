@@ -634,6 +634,36 @@ public abstract class RestApiTest {
   }
 
   @Test
+  public void testIcebergRetainsDroppedFieldTypes() throws Exception {
+    String subject = "iceberg-evolution";
+    String initial = "{\"type\":\"record\",\"name\":\"row\",\"fields\":["
+        + "{\"name\":\"id\",\"type\":\"long\"}]}";
+    String added = "{\"type\":\"record\",\"name\":\"row\",\"fields\":["
+        + "{\"name\":\"id\",\"type\":\"long\"},"
+        + "{\"name\":\"amount\",\"type\":\"int\"}]}";
+    String dropped = "{\"type\":\"record\",\"name\":\"row\",\"fields\":["
+        + "{\"name\":\"id\",\"type\":\"long\"},"
+        + "{\"name\":\"note\",\"type\":\"string\"}]}";
+    String incompatible = added.replace("\"int\"", "\"string\"");
+    restApp.restClient.updateCompatibility(BACKWARD.name, subject);
+    restApp.restClient.registerSchema(initial, subject);
+    assertFalse(restApp.restClient.testCompatibility(added, subject, "latest").isEmpty());
+    restApp.restClient.updateCompatibility(CompatibilityLevel.ICEBERG.name, subject);
+    assertEquals("ICEBERG", restApp.restClient.getConfig(subject).getCompatibilityLevel());
+    restApp.restClient.registerSchema(added, subject);
+    restApp.restClient.registerSchema(dropped, subject);
+    // Even the single-version endpoint must check retained fields from older versions.
+    assertFalse(restApp.restClient.testCompatibility(incompatible, subject, "latest").isEmpty());
+    RestClientException error = assertThrows(RestClientException.class,
+        () -> restApp.restClient.registerSchema(incompatible, subject));
+    assertEquals(Errors.INCOMPATIBLE_SCHEMA_ERROR_CODE, error.getErrorCode());
+    assertTrue(error.getMessage().contains("$.amount"));
+    assertTrue(error.getMessage().contains("oldSchema:"));
+    assertTrue(error.getMessage().contains("newSchema:"));
+    restApp.restClient.registerSchema(added.replace("\"int\"", "\"long\""), subject);
+  }
+
+  @Test
   public void testIncompatibleSchemaBySubject() throws Exception {
     String subject = "testSubject";
 
