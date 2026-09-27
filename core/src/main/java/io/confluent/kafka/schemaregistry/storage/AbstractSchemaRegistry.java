@@ -1405,13 +1405,6 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
 
     try {
       Config config = getConfigInScope(subject);
-      if (CompatibilityLevel.ICEBERG
-          == CompatibilityLevel.forName(config.getCompatibilityLevel())) {
-        // ICEBERG models retained table fields, including fields missing from the latest schema.
-        // A single-version REST preflight must not bypass that history.
-        previousSchemas = new ArrayList<>();
-        getAllVersions(subject, LookupFilter.DEFAULT).forEachRemaining(previousSchemas::add);
-      }
       List<ParsedSchemaHolder> prevParsedSchemas = new ArrayList<>(previousSchemas.size());
       for (SchemaKey previousSchema : previousSchemas) {
         prevParsedSchemas.add(new LazyParsedSchemaHolder(this, previousSchema));

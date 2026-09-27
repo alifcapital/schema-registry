@@ -64,14 +64,17 @@ public class IcebergSchemaValidatorTest {
   }
 
   @Test
-  public void remembersRemovedAndWidenedFields() {
+  public void comparesOnlyTheLatestVersion() {
     AvroSchema ints = row(field("a", "\"int\""));
-    AvroSchema longs = row(field("a", "\"long\""));
-    assertTrue(check(longs, ints, row("")).isEmpty());
-    assertTrue(check(ints, ints, longs, row("")).isEmpty());
-    List<String> errors = check(row(field("a", "\"string\"")), ints, longs, row(""));
-    assertTrue(errors.toString(), errors.get(0).contains("$.a"));
-    assertTrue(errors.toString(), errors.get(0).contains("retained long"));
+    AvroSchema strings = row(field("a", "\"string\""));
+    assertFalse(check(strings, ints).isEmpty());
+    // Version 2 was accepted under NONE after an explicit table migration.
+    assertTrue(check(strings, ints, strings).isEmpty());
+    assertFalse(check(ints, ints, strings).isEmpty());
+    // Fields missing from the latest version no longer constrain registration.
+    assertTrue(check(strings, ints, row("")).isEmpty());
+    List<String> errors = check(strings, ints);
+    assertTrue(errors.get(0).contains("$.a"));
     assertTrue(errors.get(0).contains("oldSchema:"));
     assertTrue(errors.get(0).contains("newSchema:"));
   }
@@ -87,13 +90,13 @@ public class IcebergSchemaValidatorTest {
   }
 
   @Test
-  public void checksNestedCollectionsAndRetainsNestedDrops() {
+  public void checksNestedCollectionsAgainstLatestVersion() {
     String oldType = "{\"type\":\"array\",\"items\":{\"type\":\"record\",\"name\":\"Nested\",\"fields\":["
         + field("x", "\"int\"") + "]}}";
     String widened = oldType.replace("\"int\"", "\"long\"");
     assertTrue(check(row(field("a", widened)), row(field("a", oldType))).isEmpty());
     assertFalse(check(row(field("a", oldType.replace("\"int\"", "\"string\""))),
-        row(field("a", oldType)), row("")).isEmpty());
+        row(field("a", oldType))).isEmpty());
     assertTrue(check(row(field("a", "{\"type\":\"map\",\"values\":\"long\"}")),
         row(field("a", "{\"type\":\"map\",\"values\":\"int\"}"))).isEmpty());
   }
@@ -172,8 +175,8 @@ public class IcebergSchemaValidatorTest {
   }
 
   @Test
-  public void refusesToGuessAcrossIncompatibleHistoricalTypes() {
+  public void ignoresIncompatibleOlderHistory() {
     List<String> errors = check(row(""), row(field("x", "\"int\"")), row(field("x", "\"string\"")));
-    assertTrue(errors.toString(), errors.get(0).contains("existing history"));
+    assertTrue(errors.toString(), errors.isEmpty());
   }
 }

@@ -634,7 +634,7 @@ public abstract class RestApiTest {
   }
 
   @Test
-  public void testIcebergRetainsDroppedFieldTypes() throws Exception {
+  public void testIcebergUsesLatestVersionAfterManualMigration() throws Exception {
     String subject = "iceberg-evolution";
     String initial = "{\"type\":\"record\",\"name\":\"row\",\"fields\":["
         + "{\"name\":\"id\",\"type\":\"long\"}]}";
@@ -652,15 +652,24 @@ public abstract class RestApiTest {
     assertEquals("ICEBERG", restApp.restClient.getConfig(subject).getCompatibilityLevel());
     restApp.restClient.registerSchema(added, subject);
     restApp.restClient.registerSchema(dropped, subject);
-    // Even the single-version endpoint must check retained fields from older versions.
-    assertFalse(restApp.restClient.testCompatibility(incompatible, subject, "latest").isEmpty());
+    // A dropped field is absent from the latest schema and can return with a new type.
+    assertTrue(restApp.restClient.testCompatibility(incompatible, subject, "latest").isEmpty());
+    restApp.restClient.registerSchema(incompatible, subject);
+    String widened = added.replace("\"int\"", "\"long\"");
     RestClientException error = assertThrows(RestClientException.class,
-        () -> restApp.restClient.registerSchema(incompatible, subject));
+        () -> restApp.restClient.registerSchema(widened, subject));
     assertEquals(Errors.INCOMPATIBLE_SCHEMA_ERROR_CODE, error.getErrorCode());
     assertTrue(error.getMessage().contains("$.amount"));
     assertTrue(error.getMessage().contains("oldSchema:"));
     assertTrue(error.getMessage().contains("newSchema:"));
-    restApp.restClient.registerSchema(added.replace("\"int\"", "\"long\""), subject);
+    restApp.restClient.updateCompatibility(CompatibilityLevel.NONE.name, subject);
+    restApp.restClient.registerSchema(widened, subject);
+    restApp.restClient.updateCompatibility(CompatibilityLevel.ICEBERG.name, subject);
+    String next = widened.replace("\"name\":\"amount\",\"type\":\"long\"",
+        "\"name\":\"amount\",\"type\":[\"null\",\"long\"]");
+    assertTrue(restApp.restClient.testCompatibility(next, subject, "latest").isEmpty());
+    assertTrue(restApp.restClient.testCompatibility(next, subject, null).isEmpty());
+    restApp.restClient.registerSchema(next, subject);
   }
 
   @Test

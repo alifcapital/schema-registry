@@ -46,17 +46,22 @@ is not configured in Registry, and changing that sink option requires migration.
 
 ## History and limits
 
-ICEBERG reconstructs a retained schema from all undeleted subject versions, in
-order. Dropping a field does not erase its type. Re-adding it with an incompatible
-type is rejected even if it is absent from the latest version. The compatibility
-REST endpoint also uses full history when a single version or `latest` is
-requested. Compatibility groups do not partition this history, and LENIENT does
-not weaken these rules.
+ICEBERG compares a candidate only with the latest subject version during
+registration and `latest`/subject-wide compatibility checks. An explicit version
+in the compatibility REST endpoint checks that selected version, like the
+standard non-transitive modes. Older versions do not constrain the comparison.
+Compatibility groups do not filter out the latest version, and LENIENT does not
+weaken these rules.
 
-Existing incompatible history must be reconciled explicitly before using this
-mode. Do not delete schema versions to bypass an error: deleted versions are not
-part of the check and their columns may still exist in Iceberg. Registration of
-an already registered schema retains upstream's idempotent lookup behavior;
+After a manual table migration, temporarily select NONE, register the migrated
+schema, then restore ICEBERG. That registered version becomes the new baseline;
+an incompatible transition in older history no longer blocks future schemas.
+
+A dropped field's former type is no longer remembered after the drop becomes
+the latest version. Re-adding it with another type can pass Registry; the sink
+must reject a conflict with a column still present in the actual Iceberg table.
+Do not delete schema versions to establish a new baseline. Registration of an
+already registered schema retains upstream's idempotent lookup behavior;
 Registry does not inspect each Kafka record or retroactively validate cached IDs.
 
 Registry does not contact the Iceberg catalog and does not know whether a
@@ -66,7 +71,7 @@ state, identifier fields, equality deletes, append versus CDC behavior, and
 stopping schema changes for CDC without a primary key. No per-stream profiles
 or sink configuration synchronization are needed in Registry.
 
-## Verification of this upgrade
+## Original 8.3.2 upgrade verification (before latest-only change)
 
 Verified locally with OpenJDK 21 and an isolated Apache Kafka **3.7.2** KRaft
 broker (PLAINTEXT), using the fork's 8.3.2 server and its unmodified upstream
@@ -98,6 +103,13 @@ mvn -pl client -Dtest=IcebergSchemaValidatorTest test
 mvn -pl avro-data -Dtest=IcebergCompatibilityTest test
 mvn -pl core -Dtest=AvroCompatibilityTest test
 mvn -pl avro-converter -Dtest=AvroConverterTest test
-mvn -pl core '-Dit.test=RestApiClusterTest#testIcebergRetainsDroppedFieldTypes' \
+mvn -pl core '-Dit.test=RestApiClusterTest#testIcebergUsesLatestVersionAfterManualMigration' \
   -DargLine= failsafe:integration-test failsafe:verify
 ```
+
+## Latest-only regression coverage
+
+Validator tests cover ignoring incompatible older history, checking the latest
+type, and re-adding a dropped field. The REST regression covers a rejected type
+change, accepting it under NONE after a manual migration, restoring ICEBERG, and
+successfully preflighting and registering the next schema against that baseline.

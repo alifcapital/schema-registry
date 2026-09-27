@@ -31,8 +31,8 @@ import java.util.Set;
 import org.apache.avro.Schema;
 
 /**
- * Iceberg v2 evolution for schemaful CDC. Fields absent from later source schemas are retained;
- * field types widen monotonically. This checks the subject history, not a live Iceberg catalog.
+ * Iceberg v2 evolution for schemaful CDC, comparing the candidate with the latest
+ * schema only. The live Iceberg catalog and older subject versions are not consulted.
  */
 public final class IcebergSchemaValidator implements SchemaValidator {
 
@@ -43,24 +43,23 @@ public final class IcebergSchemaValidator implements SchemaValidator {
       return Collections.singletonList("ICEBERG compatibility supports AVRO only; received "
           + candidate.schemaType());
     }
-    List<ParsedSchemaHolder> history = new ArrayList<>();
-    newestFirst.forEach(history::add);
-    Collections.reverse(history);
     Map<String, FieldType> retained = new LinkedHashMap<>();
     try {
-      for (ParsedSchemaHolder holder : history) {
+      for (ParsedSchemaHolder holder : newestFirst) {
         try {
           ParsedSchema previous = holder.schema();
           if (!(previous instanceof AvroSchema)) {
-            return Collections.singletonList("ICEBERG requires AVRO throughout subject history; "
+            return Collections.singletonList("ICEBERG requires an AVRO previous schema; "
                 + "found " + previous.schemaType());
           }
-          merge(retained, describe((AvroSchema) previous), true);
+          merge(retained, describe((AvroSchema) previous));
         } finally {
           holder.clear();
         }
+        // An incompatible version accepted under NONE becomes the new baseline.
+        break;
       }
-      merge(retained, describe((AvroSchema) candidate), false);
+      merge(retained, describe((AvroSchema) candidate));
       return Collections.emptyList();
     } catch (Incompatible e) {
       return Collections.singletonList(e.getMessage());
@@ -202,15 +201,14 @@ public final class IcebergSchemaValidator implements SchemaValidator {
     }
   }
 
-  private static void merge(Map<String, FieldType> retained, Map<String, FieldType> incoming,
-      boolean historical) {
+  private static void merge(Map<String, FieldType> retained, Map<String, FieldType> incoming) {
     for (Map.Entry<String, FieldType> entry : incoming.entrySet()) {
       String path = entry.getKey();
       FieldType next = entry.getValue();
       FieldType old = retained.get(path);
       if (old == null) {
         if (next.keyRoot != null && retained.containsKey(next.keyRoot)) {
-          throw conflict(path, retained.get(next.keyRoot), next, historical,
+          throw conflict(path, retained.get(next.keyRoot), next,
               "map keys cannot evolve");
         }
         // A whole new map (including its key structure) may be added.
@@ -220,17 +218,17 @@ public final class IcebergSchemaValidator implements SchemaValidator {
         continue;
       }
       if (next.keyRoot != null || old.keyRoot != null) {
-        throw conflict(path, old, next, historical, "map keys cannot evolve");
+        throw conflict(path, old, next, "map keys cannot evolve");
       }
       if (!old.accepts(next) && !next.accepts(old)) {
-        throw conflict(path, old, next, historical, "no lossless Iceberg v2 type promotion");
+        throw conflict(path, old, next, "no lossless Iceberg v2 type promotion");
       }
     }
     for (Map.Entry<String, FieldType> entry : retained.entrySet()) {
       FieldType old = entry.getValue();
       if (old.keyRoot != null && incoming.containsKey(old.keyRoot)
           && !incoming.containsKey(entry.getKey())) {
-        throw conflict(entry.getKey(), old, incoming.get(old.keyRoot), historical,
+        throw conflict(entry.getKey(), old, incoming.get(old.keyRoot),
             "map key fields cannot be removed");
       }
     }
@@ -243,9 +241,9 @@ public final class IcebergSchemaValidator implements SchemaValidator {
   }
 
   private static Incompatible conflict(String path, FieldType old, FieldType next,
-      boolean historical, String reason) {
+      String reason) {
     return new Incompatible("ICEBERG at " + path + ": retained " + old + ", incoming " + next
-        + "; " + reason + (historical ? "; existing history needs explicit reconciliation" : "")
+        + "; " + reason
         + "; oldSchemaVersion: " + old.origin.version + "; oldSchema: " + old.origin.schema
         + "; newSchema: " + next.origin.schema);
   }
