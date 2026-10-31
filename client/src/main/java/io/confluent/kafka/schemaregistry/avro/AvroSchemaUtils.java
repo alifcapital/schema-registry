@@ -33,6 +33,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.LinkedList;
+import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.TreeMap;
@@ -742,7 +743,9 @@ public class AvroSchemaUtils {
 
     @Override
     public void setField(Object record, String name, int position, Object value) {
-      if (record instanceof GenericRecord && ((GenericRecord)record).hasField(name)) {
+      if (record instanceof IndexedRecord && isFieldAt((IndexedRecord) record, name, position)) {
+        ((IndexedRecord) record).put(position, value);
+      } else if (record instanceof GenericRecord && ((GenericRecord)record).hasField(name)) {
         ((GenericRecord) record).put(name, value);
       } else {
         ((IndexedRecord) record).put(position, value);
@@ -751,11 +754,20 @@ public class AvroSchemaUtils {
 
     @Override
     public Object getField(Object record, String name, int position) {
-      if (record instanceof GenericRecord && ((GenericRecord)record).hasField(name)) {
+      if (record instanceof IndexedRecord && isFieldAt((IndexedRecord) record, name, position)) {
+        return ((IndexedRecord) record).get(position);
+      } else if (record instanceof GenericRecord && ((GenericRecord)record).hasField(name)) {
         return ((GenericRecord) record).get(name);
       } else {
         return ((IndexedRecord) record).get(position);
       }
+    }
+
+    // We expect the record to have its fields in the same order as the schema we write with, and
+    // then the field with this name is at this position, so we can skip the two lookups by name.
+    private static boolean isFieldAt(IndexedRecord record, String name, int position) {
+      List<Schema.Field> fields = record.getSchema().getFields();
+      return position < fields.size() && fields.get(position).name().equals(name);
     }
 
     // The following methods override all methods that rely on logical conversions
@@ -807,11 +819,74 @@ public class AvroSchemaUtils {
 
     @Override
     public int resolveUnion(Schema union, Object datum) {
+      int index = resolveNullableUnion(union, datum);
+      if (index >= 0) {
+        return index;
+      }
       if (this.delegate != null) {
         return this.delegate.resolveUnion(union, datum);
       } else {
         return super.resolveUnion(union, datum);
       }
+    }
+
+    // Most unions in a record are an optional field: null and one other type. For these we give
+    // the answer that GenericData.resolveUnion gives, without its lookups by name, when it is
+    // certain: the datum is null, or it is of exactly the Java class of a plain primitive type
+    // that the other branch has. Everything else, including branches with a logical type that a
+    // conversion could take, is left to GenericData.resolveUnion and we return -1.
+    private static int resolveNullableUnion(Schema union, Object datum) {
+      if (union.getType() != Schema.Type.UNION) {
+        return -1;
+      }
+      List<Schema> types = union.getTypes();
+      if (types.size() != 2) {
+        return -1;
+      }
+      int nullIndex;
+      if (types.get(0).getType() == Schema.Type.NULL) {
+        nullIndex = 0;
+      } else if (types.get(1).getType() == Schema.Type.NULL) {
+        nullIndex = 1;
+      } else {
+        return -1;
+      }
+      if (datum == null) {
+        return nullIndex;
+      }
+      int otherIndex = 1 - nullIndex;
+      Schema other = types.get(otherIndex);
+      if (other.getLogicalType() != null) {
+        return -1;
+      }
+      boolean matches;
+      switch (other.getType()) {
+        case LONG:
+          matches = datum instanceof Long;
+          break;
+        case INT:
+          matches = datum instanceof Integer;
+          break;
+        case STRING:
+          matches = datum instanceof String;
+          break;
+        case BOOLEAN:
+          matches = datum instanceof Boolean;
+          break;
+        case DOUBLE:
+          matches = datum instanceof Double;
+          break;
+        case FLOAT:
+          matches = datum instanceof Float;
+          break;
+        case BYTES:
+          matches = datum instanceof ByteBuffer;
+          break;
+        default:
+          matches = false;
+          break;
+      }
+      return matches ? otherIndex : -1;
     }
   }
 
