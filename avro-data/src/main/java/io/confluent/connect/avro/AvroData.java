@@ -623,6 +623,9 @@ public class AvroData {
           } else {
             org.apache.avro.Schema underlyingAvroSchema = avroSchemaForUnderlyingTypeIfOptional(
                 schema, avroSchema, scrubInvalidNames);
+            if (hasSameFieldNames(schema, underlyingAvroSchema)) {
+              return fromConnectStruct(schema, struct, underlyingAvroSchema);
+            }
             GenericRecordBuilder convertedBuilder = new GenericRecordBuilder(underlyingAvroSchema);
             for (Field field : schema.fields()) {
               String fieldName = scrubName(field.name(), scrubInvalidNames);
@@ -644,6 +647,71 @@ public class AvroData {
       }
     } catch (ClassCastException e) {
       throw new DataException("Invalid type for " + schema.type() + ": " + value.getClass());
+    }
+  }
+
+  /**
+   * Returns true if the Avro record schema has a field for each field of the Connect struct
+   * schema, with the same name and in the same order, and no other fields.
+   */
+  private boolean hasSameFieldNames(Schema schema, org.apache.avro.Schema avroSchema) {
+    if (avroSchema.getType() != org.apache.avro.Schema.Type.RECORD) {
+      return false;
+    }
+    List<Field> fields = schema.fields();
+    List<org.apache.avro.Schema.Field> avroFields = avroSchema.getFields();
+    if (fields.size() != avroFields.size()) {
+      return false;
+    }
+    for (int i = 0; i < fields.size(); i++) {
+      if (!avroFields.get(i).name().equals(scrubName(fields.get(i).name()))) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /**
+   * Converts a struct to a record when {@link #hasSameFieldNames} is true. Every field of the
+   * record gets its value from the struct, so there are no defaults to fill in, and we can put the
+   * values in the record directly instead of going through a GenericRecordBuilder, which looks up
+   * each field by name and copies the record when it is built.
+   */
+  private GenericData.Record fromConnectStruct(
+      Schema schema, Struct struct, org.apache.avro.Schema avroSchema) {
+    List<Field> fields = schema.fields();
+    List<org.apache.avro.Schema.Field> avroFields = avroSchema.getFields();
+    GenericData.Record record = new GenericData.Record(avroSchema);
+    for (int i = 0; i < fields.size(); i++) {
+      Field field = fields.get(i);
+      org.apache.avro.Schema.Field avroField = avroFields.get(i);
+      Object fieldValue = ignoreDefaultForNullables
+          ? struct.getWithoutDefault(field.name()) : struct.get(field);
+      Object converted =
+          fromConnectData(field.schema(), avroField.schema(), fieldValue, false, true);
+      if (converted == null && !acceptsNull(avroField.schema())) {
+        // GenericRecordBuilder refuses a null for a field that does not accept it, unless the
+        // field has a default value, so we let it decide and throw its exception for such data.
+        new GenericRecordBuilder(avroSchema).set(avroField, null);
+      }
+      record.put(i, converted);
+    }
+    return record;
+  }
+
+  private static boolean acceptsNull(org.apache.avro.Schema avroSchema) {
+    switch (avroSchema.getType()) {
+      case NULL:
+        return true;
+      case UNION:
+        for (org.apache.avro.Schema type : avroSchema.getTypes()) {
+          if (type.getType() == org.apache.avro.Schema.Type.NULL) {
+            return true;
+          }
+        }
+        return false;
+      default:
+        return false;
     }
   }
 
