@@ -41,6 +41,7 @@ import org.apache.kafka.connect.storage.Converter;
 
 import java.util.Collections;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Implementation of Converter that uses Avro schemas and objects.
@@ -53,6 +54,7 @@ public class AvroConverter implements Converter {
 
   private boolean isKey;
   private AvroData avroData;
+  private AvroSchemaCache avroSchemas;
 
   public AvroConverter() {
   }
@@ -79,7 +81,9 @@ public class AvroConverter implements Converter {
 
     serializer = new Serializer(configs, schemaRegistry);
     deserializer = new Deserializer(configs, schemaRegistry);
-    avroData = new AvroData(new AvroDataConfig(configs));
+    AvroDataConfig avroDataConfig = new AvroDataConfig(configs);
+    avroData = new AvroData(avroDataConfig);
+    avroSchemas = new AvroSchemaCache(avroDataConfig.schemaCacheSize());
   }
 
   @Override
@@ -96,7 +100,7 @@ public class AvroConverter implements Converter {
           isKey,
           headers,
           avroData.fromConnectData(schema, avroSchema, value),
-          new AvroSchema(avroSchema));
+          avroSchemas.get(avroSchema));
     } catch (TimeoutException e) {
       throw new RetriableException(
           String.format("Failed to serialize Avro data from topic %s :", topic),
@@ -155,6 +159,67 @@ public class AvroConverter implements Converter {
     }
   }
 
+
+  /**
+   * Keeps the AvroSchema made for an Avro schema object, and finds it again by identity.
+   *
+   * <p>AvroData returns the same Avro schema object for every record of a Connect schema. We fear
+   * that wrapping it in a new AvroSchema for every record makes the schema registry client compute
+   * the hash of a new object and compare it deeply with the cached one each time, so we wrap each
+   * Avro schema object once. An Avro schema object that is equal to another one, but not the same
+   * object, gets its own AvroSchema, as it would without this cache.
+   *
+   * <p>We fear that an unbounded cache leaks memory when schemas keep changing, so when it is full
+   * we drop everything and start again. The entries are cheap to make.
+   */
+  static final class AvroSchemaCache {
+
+    private final int maxSize;
+    private final ConcurrentHashMap<IdentityKey, AvroSchema> schemas = new ConcurrentHashMap<>();
+
+    AvroSchemaCache(int maxSize) {
+      this.maxSize = maxSize;
+    }
+
+    AvroSchema get(org.apache.avro.Schema avroSchema) {
+      IdentityKey key = new IdentityKey(avroSchema);
+      AvroSchema schema = schemas.get(key);
+      if (schema == null) {
+        if (schemas.size() >= maxSize) {
+          schemas.clear();
+        }
+        schema = new AvroSchema(avroSchema);
+        AvroSchema existing = schemas.putIfAbsent(key, schema);
+        if (existing != null) {
+          schema = existing;
+        }
+      }
+      return schema;
+    }
+
+    int size() {
+      return schemas.size();
+    }
+  }
+
+  private static final class IdentityKey {
+
+    private final org.apache.avro.Schema schema;
+
+    IdentityKey(org.apache.avro.Schema schema) {
+      this.schema = schema;
+    }
+
+    @Override
+    public int hashCode() {
+      return System.identityHashCode(schema);
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      return o instanceof IdentityKey && ((IdentityKey) o).schema == schema;
+    }
+  }
 
   private static class Serializer extends AbstractKafkaAvroSerializer {
 
